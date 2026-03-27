@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucky Draw - THE RUOS GAMING Revision</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <style>
+        :root { 
+            --gold: #f1c40f; --dark: #0a0a0a; --card: #161616; 
+            --slot: #222; --cyan: #00d2ff; --accent: #ff4757; 
+        }
+        
+        body { 
+            font-family: 'Phetsarath OT', sans-serif; 
+            background: var(--dark); color: white; margin: 0; padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* ການຈັດ Layout ແບ່ງຊ້າຍ-ຂວາ */
+        .main-container {
+            display: grid;
+            grid-template-columns: 350px 1fr; /* ຊ້າຍ 350px, ຂວາສ່ວນທີ່ເຫຼືອ */
+            gap: 30px;
+            max-width: 1600px;
+            margin: 0 auto;
+            align-items: start;
+        }
+
+        /* ເບື້ອງຊ້າຍ: Spin & Controls (ປັບປຸງໃຫ້ຍາວຂຶ້ນເພື່ອໃສ່ຮູບພາບ) */
+        .left-panel {
+            background: var(--card);
+            padding: 25px;
+            border-radius: 20px;
+            border: 1px solid #333;
+            position: sticky;
+            top: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex; /* ໃຊ້ flexbox */
+            flex-direction: column; /* ຈັດລຽງລົງລຸ່ມ */
+            height: fit-content; /* ໃຫ້ສູງຕາມເນື້ອໃນ */
+        }
+
+        textarea {
+            width: 100%; height: 100px; background: #000; color: var(--cyan);
+            border: 1px solid #444; border-radius: 10px; padding: 10px; 
+            resize: none; margin-bottom: 15px; font-size: 0.9rem;
+        }
+
+        .wheel-container { position: relative; width: 260px; height: 260px; margin: 0 auto 20px; }
+        canvas { width: 100%; height: 100%; border-radius: 50%; border: 6px solid #222; }
+        
+        .pointer { 
+            position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+            width: 0; height: 0; border-left: 15px solid transparent;
+            border-right: 15px solid transparent; border-top: 25px solid var(--accent);
+            z-index: 10;
+        }
+
+        /* ປຸ່ມ Spin */
+        .btn-spin { 
+            width: 100%; background: linear-gradient(135deg, var(--gold), #b8860b);
+            border: none; padding: 15px; border-radius: 12px;
+            font-weight: bold; cursor: pointer; font-size: 1.1rem; color: #000;
+        }
+        .btn-spin:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ສ່ວນໃໝ່: ຮູບພາບດ້ານລຸ່ມ (1920x480px) */
+        .image-container {
+            margin-top: 30px; /* ໄລຍະຫ່າງຈາກສ່ວນຂ້າງເທິງ */
+            border-radius: 12px;
+            overflow: hidden; /* ປ້ອງກັນບໍ່ໃຫ້ຮູບພາບລົ້ນ */
+            border: 1px solid #333; /* ຂອບເລັກນ້ອຍ */
+        }
+        .image-container img {
+            width: 100%; /* ໃຫ້ກວ້າງເຕັມພື້ນທີ່ */
+            height: auto; /* ໃຫ້ສູງຕາມສັດສ່ວນຂອງຮູບ */
+            display: block; /* ລຶບຊ່ອງຫວ່າງຂ້າງລຸ່ມ */
+        }
+
+        /* ເບື້ອງຂວາ: All Groups A-F */
+        .right-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* ປັບຈຳນວນຖັນຕາມຄວາມກວ້າງ */
+            gap: 15px;
+        }
+
+        .group-box { 
+            background: var(--card); border-radius: 12px; padding: 15px; 
+            border: 1px solid #222; height: fit-content;
+        }
+
+        .group-header { 
+            color: var(--cyan); text-align: center; font-weight: bold;
+            font-size: 1.1rem; border-bottom: 2px solid #222;
+            padding-bottom: 8px; margin-bottom: 10px;
+        }
+
+        .slot { 
+            display: flex; justify-content: center; /* ປ່ຽນເປັນ center ຍ້ອນບໍ່ມີເລກນັບແລ້ວ */
+            padding: 6px 10px; background: var(--slot); 
+            margin-bottom: 4px; border-radius: 6px; font-size: 0.8rem; color: #444;
+        }
+
+        .slot.filled { 
+            color: #fff; background: #2a2a2a; border-left: 4px solid var(--gold); 
+            animation: flash 0.5s ease;
+        }
+
+        @keyframes flash { 0% { background: var(--gold); } 100% { background: #2a2a2a; } }
+
+        @media (max-width: 1000px) {
+            .main-container { grid-template-columns: 1fr; }
+            .left-panel { position: relative; top: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <div class="left-panel">
+        <h2 style="color:var(--gold); margin-top:0;">LUCKY DRAW</h2>
+        <textarea id="teamInput" placeholder="ລາຍຊື່ທີມ (1 ຊື່/ແຖວ)"></textarea>
+        
+        <div class="wheel-container">
+            <div class="pointer"></div>
+            <canvas id="wheelCanvas" width="260" height="260"></canvas>
+        </div>
+
+        <div id="status" style="margin-bottom:15px; font-weight:bold; color:var(--gold);">ພ້ອມແລ້ວ!</div>
+        <button class="btn-spin" id="spinBtn" onclick="startSpin()">START SPIN 🎰</button>
+        
+        <div style="margin-top:15px; font-size: 0.8rem; color: #666;">
+            <span id="doneCount" style="color:var(--cyan)">ສຸ່ມແລ້ວ: 0 ທີມ</span>
+            <br><br>
+            <button onclick="resetApp()" style="background:none; border:1px solid #333; color:#555; cursor:pointer; padding:5px 10px; border-radius:5px;">Reset All</button>
+        </div>
+
+        <div class="image-container">
+            <img src="/imge/ict1.png" alt="THE RUOS GAMING ESPORT 2026 Banner">
+        </div>
+    </div>
+
+    <div class="right-panel" id="groupsDisplay"></div>
+</div>
+
+<audio id="spinSound" src="https://www.soundjay.com/misc/sounds/wheel-fortune-1.mp3"></audio>
+<audio id="winSound" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"></audio>
+
+<script>
+    const groupNames = ['A', 'B', 'C', 'D', 'E', 'F'];
+    const MAX_PER_GROUP = 12;
+    let allTeams = [];
+    let groups = {};
+    let currentGroupIdx = 0;
+    let isSpinning = false;
+    let rotation = 0;
+
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function init() {
+        const grid = document.getElementById('groupsDisplay');
+        grid.innerHTML = '';
+        groupNames.forEach(name => {
+            groups[name] = [];
+            let slotsHTML = '';
+            for(let i=1; i<=MAX_PER_GROUP; i++) {
+                // ປັບປຸງ: ເອົາເລກນັບ (#${i}) ອອກ ແລະ ປ່ຽນ span ເປັນ center-align
+                slotsHTML += `<div class="slot" id="slot-${name}-${i}">
+                    <span id="name-${name}-${i}">ລໍຖ້າ...</span>
+                </div>`;
+            }
+            // ປັບປຸງ: ເອົາ 'X' ອອກຈາກ Header
+            grid.innerHTML += `<div class="group-box"><div class="group-header">GROUP ${name}</div>${slotsHTML}</div>`;
+        });
+        updateTeamList();
+        drawWheel(0);
+    }
+
+    function updateTeamList() {
+        const val = document.getElementById('teamInput').value.trim();
+        allTeams = val === "" ? Array.from({length: 72}, (_, i) => `Team ${String(i+1).padStart(2,'0')}`) : val.split('\n').filter(t => t.trim() !== "");
+        // ປັບປຸງ: ສະແດງຂໍ້ຄວາມໃຫມ່
+        document.getElementById('doneCount').innerText = `ສຸ່ມແລ້ວ: 0 / ${allTeams.length}`;
+    }
+
+    function drawWheel(angle) {
+        ctx.clearRect(0,0,260,260);
+        ctx.save(); ctx.translate(130,130); ctx.rotate(angle);
+        for(let i=0; i<12; i++) {
+            ctx.beginPath(); ctx.fillStyle = i%2? "#111":"#1a1a1a";
+            ctx.moveTo(0,0); ctx.arc(0,0,125, i*(Math.PI/6), (i+1)*(Math.PI/6)); ctx.fill();
+            ctx.strokeStyle = "#222"; ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    function startSpin() {
+        if(isSpinning || allTeams.length === 0) return;
+        updateTeamList(); // ກວດເບິ່ງລາຍຊື່ທີມທຸກຄັ້ງກ່ອນເລີ່ມ
+        isSpinning = true;
+        document.getElementById('spinBtn').disabled = true;
+        document.getElementById('spinSound').play().catch(()=>{});
+        
+        let start = null;
+        const duration = 3500;
+        const finalRotation = rotation + (Math.PI * 10) + (Math.random() * Math.PI * 2);
+
+        function animate(now) {
+            if(!start) start = now;
+            const progress = (now - start) / duration;
+            const easeOut = 1 - Math.pow(1 - Math.min(progress, 1), 4);
+            const currentAngle = rotation + (finalRotation - rotation) * easeOut;
+            drawWheel(currentAngle);
+            if(progress < 1) requestAnimationFrame(animate);
+            else {
+                rotation = currentAngle % (Math.PI*2);
+                finishSpin();
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    function finishSpin() {
+        const selected = allTeams.splice(Math.floor(Math.random()*allTeams.length), 1)[0];
+        assignToGroup(selected);
+        document.getElementById('winSound').play().catch(()=>{});
+        document.getElementById('status').innerText = "🏆 " + selected;
+        // ປັບປຸງ: ອັບເດດຂໍ້ຄວາມສະແດງຈຳນວນ
+        const originalTotal = document.getElementById('teamInput').value.split('\n').filter(t => t.trim() !== "").length || 72;
+        document.getElementById('doneCount').innerText = `ສຸ່ມແລ້ວ: ${originalTotal - allTeams.length} / ${originalTotal}`;
+        isSpinning = false;
+        document.getElementById('spinBtn').disabled = false;
+        if(allTeams.length === 0) confetti();
+    }
+
+    function assignToGroup(team) {
+        let attempts = 0;
+        while(attempts < 6) {
+            let gName = groupNames[currentGroupIdx];
+            if(groups[gName].length < MAX_PER_GROUP) {
+                groups[gName].push(team);
+                const idx = groups[gName].length;
+                document.getElementById(`name-${gName}-${idx}`).innerText = team;
+                document.getElementById(`slot-${gName}-${idx}`).classList.add('filled');
+                currentGroupIdx = (currentGroupIdx + 1) % 6;
+                return;
+            }
+            currentGroupIdx = (currentGroupIdx + 1) % 6;
+            attempts++;
+        }
+    }
+
+    function resetApp() { if(confirm("ລຶບຂໍ້ມູນທັງໝົດເພື່ອເລີ່ມໃໝ່ບໍ?")) init(); }
+    init();
+</script>
+
+</body>
+</html>
